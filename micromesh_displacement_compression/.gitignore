@@ -1,0 +1,15 @@
+build
+_build
+inst*/
+_inst*/
+**/Debug
+**/Release/*
+**/CMakeFiles
+**/cmake_install.cmake
+/.vs
+.vscode/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+cmake_build
