@@ -206,7 +206,7 @@ layout(binding = eScratchVertexAliases, set = 0) buffer ScratchVertexAliases
 
 layout(binding = eScratchVertexOriginalPos, set = 0) buffer ScratchVertexOriginalPos
 {
-    float scratchVertexOriginalPos[];
+    vec4 scratchVertexOriginalPos[];
 };
 
 layout(binding = eScratchActiveVertices, set = 0) buffer ScratchActiveVerticesBuffer

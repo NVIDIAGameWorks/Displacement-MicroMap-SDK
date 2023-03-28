@@ -28,7 +28,7 @@ uint localTriangleCount = ~0u;
 // the edge index in the lower 32 bits
 uint64_t packEdge(uint index, float cost)
 {
-    return pack64(i32vec2(index, floatBitsToUint(cost)));
+    return pack64(i32vec2(index, encodeMinMaxFp32(cost)));
 }
 
 

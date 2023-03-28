@@ -41,6 +41,7 @@ MAIN
     if(RM_CONSTANTS.iterationIndex > 1)
     {
         // Block volume preservation at seams to avoid watertightness issues
-        mergeOutputVertices(index, rvGetMergingWith(index), hasFlag(rvGetFlags(index), RM_V_MARKED));
+        mergeOutputVertices(index, rvGetMergingWith(index),
+                            hasFlag(rvGetFlags(index), RM_V_MARKED) && !hasFlag(rvGetFlags(index), RM_V_EDGE));
     }
 }
