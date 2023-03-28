@@ -293,8 +293,10 @@ MICROMESH_API Result MICROMESH_CALL micromeshGpuRemeshingBeginTask(GpuRemeshing 
     output->scratchTaskAllocs[remesher::ScratchBuffers::eScratchVertexAliases].buffer.size =
         input->meshVertexCount * sizeof(uint32_t);
 
+    // 3 floats for position, 1 for the max edge length of the original triangles adjacent to that vertex
+    // (used for the displacement bounds estimate)
     output->scratchTaskAllocs[remesher::ScratchBuffers::eScratchOriginalPos].buffer.size =
-        input->meshVertexCount * 3 * sizeof(float);
+        input->meshVertexCount * 4 * sizeof(float);
 
     output->scratchTaskAllocs[remesher::ScratchBuffers::eScratchTriangleSubdivisionInfoBackupBuffer].buffer.size =
         input->meshTriangleCount * sizeof(uint32_t);
@@ -659,8 +661,8 @@ MICROMESH_API Result MICROMESH_CALL micromeshGpuRemeshingContinueTask(GpuRemeshi
             }
             if(task->decimationState == remesher::DecimationState::eDecimation)
             {
-                cmdDispatch(seqInfo, remesher::Pipelines::eEdgeCostDistribute, remeshing->currentIndexCount / 3);
-                cmdDispatch(seqInfo, remesher::Pipelines::eCollapseFlag, remeshing->currentIndexCount / 3);
+                cmdDispatch(seqInfo, remesher::Pipelines::eEdgeCostDistribute, remeshing->constants.edgeListSize);
+                cmdDispatch(seqInfo, remesher::Pipelines::eCollapseFlag, remeshing->constants.edgeListSize);
 
                 cmdDispatch(seqInfo, remesher::Pipelines::eCollapsePropagate, remeshing->currentIndexCount / 3);
 
@@ -671,7 +673,6 @@ MICROMESH_API Result MICROMESH_CALL micromeshGpuRemeshingContinueTask(GpuRemeshi
 
                 seqInfo->pfnGenerateGpuCommand(micromesh::gpu::CommandType::eBindResources, &br, seqInfo->userData);
 
-                //cmdDispatch(seqInfo, remesher::Pipelines::eMarkOphans, remeshing->currentIndexCount / 3);
                 remeshing->constants.isFinalCompaction = 0;
                 //if (task->iterationIndex % 10 == 0)
                 {

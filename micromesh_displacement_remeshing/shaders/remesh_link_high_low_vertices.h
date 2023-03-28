@@ -218,14 +218,23 @@ void propagateToAdjacentTriangles(RM_DATA_ARG uint vertexIndex, vec3 position, u
     vec2  bestDisp;
     vec3  bestBary;
 
+    float originalMaxEdgeLength = getOriginalMaxEdgeLength(originalIndex);
+
     while(encodedLastTriangleIndex != ~0u)
     {
         uvec2 lastTri           = decodePreviousTriangle(encodedLastTriangleIndex);
         uint  lastTriangleIndex = lastTri.x;
         vec3  bary;
         vec2  disp = computeDisplacement(RM_DATA_VAL lastTriangleIndex, position, bary);
+
         if(floatBitsToUint(disp.x) != ~0u)
         {
+            // Extend the computed displacement by the maximum length of the edges
+            // adjacent to the original vertex. This allows the bounds estimate to
+            // encompass not only the original vertices, but also the surface of the
+            // original triangles that may lie across the boundaries of the decimated
+            // triangles
+            disp += vec2(-originalMaxEdgeLength, originalMaxEdgeLength);
             float score = abs(disp.x);
             if(score < bestScore)
             {
@@ -247,6 +256,46 @@ void propagateToAdjacentTriangles(RM_DATA_ARG uint vertexIndex, vec3 position, u
     }
 }
 
+float sqLength(vec3 v)
+{
+    return dot(v, v);
+}
+
+float computeSqMaxEdgeLengthTriangle(uint triangleIndex)
+{
+    uvec3 indices = siGetDedupTriangle(triangleIndex);
+    vec3  v[3];
+    for(uint i = 0; i < 3; i++)
+    {
+        v[i] = getOriginalVertex(indices[i]);
+    }
+
+    float d0 = sqLength(v[1] - v[0]);
+    float d1 = sqLength(v[2] - v[0]);
+    float d2 = sqLength(v[1] - v[2]);
+
+    return max(d0, max(d1, d2));
+}
+
+float computeMaxOriginalEdgeLength(uint index)
+{
+    uint encodedLastTriangleIndex = rvGetLastTriangle(index);
+
+    float maxEdgeLength = 0.f;
+
+    while(encodedLastTriangleIndex != ~0u)
+    {
+        uvec2 lastTri           = decodePreviousTriangle(encodedLastTriangleIndex);
+        uint  lastTriangleIndex = lastTri.x;
+
+        maxEdgeLength = max(maxEdgeLength, computeSqMaxEdgeLengthTriangle(lastTriangleIndex));
+
+
+        uint localVertexIndex    = lastTri.y;
+        encodedLastTriangleIndex = rtGetPreviousTriangle(lastTriangleIndex, localVertexIndex);
+    }
+    return sqrt(maxEdgeLength);
+}
 
 MAIN
 {
@@ -258,6 +307,11 @@ MAIN
         return;
 
     vec3 originalPosition = getOriginalVertex(index);
+
+    if(RM_CONSTANTS.backupPositions == 1)
+    {
+        setOriginalMaxEdgeLength(index, computeMaxOriginalEdgeLength(index));
+    }
 
     uint currentIndex = index;
     bool isActive     = (RM_DATA(scratchVertexAliases)[currentIndex] == ~0u);

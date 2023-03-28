@@ -147,11 +147,27 @@ vec3 getOutputVertexImpl(RM_DATA_ARG uint index)
 #define getOriginalVertex(arg0_) getOriginalVertexImpl(RM_DATA_VAL arg0_)
 vec3 getOriginalVertexImpl(RM_DATA_ARG uint index)
 {
-    vec3 res;
-    for(uint i = 0; i < 3; i++)
-        res[i] = RM_DATA(scratchVertexOriginalPos)[index * 3 + i];
-    return res;
+    return RM_DATA(scratchVertexOriginalPos)[index].xyz;
 }
+
+#define setOriginalVertex(arg0_, arg1_) setOriginalVertexImpl(RM_DATA_VAL arg0_, arg1_)
+void setOriginalVertexImpl(RM_DATA_ARG uint index, vec3 pos)
+{
+    RM_DATA(scratchVertexOriginalPos)[index].xyz = pos;
+}
+
+#define getOriginalMaxEdgeLength(arg0_) getOriginalMaxEdgeLengthImpl(RM_DATA_VAL arg0_)
+float getOriginalMaxEdgeLengthImpl(RM_DATA_ARG uint index)
+{
+    return RM_DATA(scratchVertexOriginalPos)[index].w;
+}
+
+#define setOriginalMaxEdgeLength(arg0_, arg1_) setOriginalMaxEdgeLengthImpl(RM_DATA_VAL arg0_, arg1_)
+void setOriginalMaxEdgeLengthImpl(RM_DATA_ARG uint index, float maxEdgeLength)
+{
+    RM_DATA(scratchVertexOriginalPos)[index].w = maxEdgeLength;
+}
+
 
 #define getOutputPosNormal(arg0_, arg1_, arg2_) getOutputPosNormalImpl(RM_DATA_VAL arg0_, arg1_, arg2_)
 void getOutputPosNormalImpl(RM_DATA_ARG uint index, REF(vec3) pos, REF(vec3) normal)

@@ -23,85 +23,14 @@ stored in its adjacent triangles
 #undef MAIN_NAME
 #define MAIN_NAME remeshApplyMinDisplacement
 
-// Intersect a ray starting at v in direction d with a plane passing through anchor with normal n
-float intersectDirectionTrianglePlane(vec3 v, vec3 d, vec3 n, vec3 anchor)
-{
-    float nDotD = dot(n, d);
-    if(nDotD != 0.f)
-        return (dot(n, anchor) - dot(n, v)) / nDotD;
-    return FLT_MAX;
-}
 
 // Find the min and max displacement for the vertex at vertexIndex so that displacement
 // encompasses any displacement within the bounds of the triangle at triangleIndex
 vec2 findMinMaxDisplacementFromTriangle(RM_DATA_ARG uint vertexIndex, uint triangleIndex)
 {
-    uint localIndex;
-    vec3 v[3];
-    vec3 d[3];
-
-    vec3 vMax[3], vMin[3];
-
     float triMin = rtGetMinDisplacement(triangleIndex);
     float triMax = rtGetMaxDisplacement(triangleIndex);
-
-    uvec3 indices = siGetDedupTriangle(triangleIndex);
-
-    for(uint i = 0; i < 3; i++)
-    {
-        v[i] = cvGetOutputPosition(indices[i]);
-        d[i] = cvGetVertexDirection(indices[i]);
-        if(indices[i] == vertexIndex)
-        {
-            localIndex = i;
-        }
-        vMin[i] = v[i] + d[i] * triMin;
-        vMax[i] = v[i] + d[i] * triMax;
-    }
-
-    vec2 displacement = vec2(triMin, triMax);
-
-    for(uint i = 0; i < 3; i++)
-    {
-        if(i != localIndex)
-        {
-            // Intersect the plane containing the min and max displaced vertex with a ray
-            // starting at the vertex of interest along its displacement direction
-            // This is the more conservative estimate for max (resp. min) displacement on convex (resp. concave)
-            // areas
-            float d0 = 0.f;
-            float d1 = 0.f;
-            // The ray-plane intersection will output very large results if the displacement directions
-            // of the vertex and the vertex of interest are nearly orthogonal. In this case we revert
-            // to using the other estimate below
-            if(abs(dot(d[localIndex], d[i])) > 0.1f)
-            {
-                d0 = intersectDirectionTrianglePlane(v[localIndex], d[localIndex], d[i], vMin[i]);
-                d1 = intersectDirectionTrianglePlane(v[localIndex], d[localIndex], d[i], vMax[i]);
-            }
-
-            // Project the min and max displaced vertex along
-            // the displacement direction of the vertex of interest
-            // This is the more conservative estimate for min (resp. max) displacement on convex (resp. concave)
-            // areas
-            vec3  minDisp = v[i] + triMin * d[i] - v[localIndex];
-            vec3  maxDisp = v[i] + triMax * d[i] - v[localIndex];
-            float d2      = dot(d[localIndex], minDisp);
-            float d3      = dot(d[localIndex], maxDisp);
-
-            // Take the min and max of both calculations
-            // This is required to account for the surface of original triangles whose vertices
-            // lie across several decimated triangles
-            float minD = min(d3, min(d2, min(d0, d1)));
-            float maxD = max(d3, max(d2, max(d0, d1)));
-
-            if(minD != FLT_MAX)
-                displacement.x = min(displacement.x, minD);
-            if(maxD != FLT_MAX)
-                displacement.y = max(displacement.y, maxD);
-        }
-    }
-    return displacement;
+    return vec2(triMin, triMax);
 }
 
 

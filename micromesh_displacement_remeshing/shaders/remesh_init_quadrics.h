@@ -50,8 +50,6 @@ MAIN
     // for later use when estimating the min/max displacement per triangle
     if(RM_CONSTANTS.backupPositions == 1)
     {
-        vec3 v = getOutputVertex(index);
-        for(uint i = 0; i < 3; i++)
-            RM_DATA(scratchVertexOriginalPos)[index * 3 + i] = v[i];
+        setOriginalVertex(index, getOutputVertex(index));
     }
 }
