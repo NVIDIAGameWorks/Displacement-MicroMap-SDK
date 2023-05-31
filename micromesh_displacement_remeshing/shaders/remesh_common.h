@@ -332,3 +332,17 @@ bool hasFlag(uint mask, uint flag)
 {
     return (mask & flag) == flag;
 }
+
+#define computeEdgeId(arg0_) computeEdgeIdImpl(RM_DATA_VAL arg0_)
+uint computeEdgeIdImpl(RM_DATA_ARG uvec2 vertices)
+{
+    precise vec3 v0 = getOutputVertex(vertices.x);
+    precise vec3 v1 = getOutputVertex(vertices.y);
+
+    uint hv0 = hashVertexChecksum(v0);
+    uint hv1 = hashVertexChecksum(v1);
+
+
+    uint edgeId = hashEdgeChecksum(uvec2(hv0, hv1));
+    return edgeId;
+}

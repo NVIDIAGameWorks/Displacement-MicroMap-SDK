@@ -78,8 +78,8 @@ struct ScopedOpContext
     ScopedOpContext(micromesh::OpConfig            config       = micromeshGetDefaultOpConfig(),
                     micromesh::MessageCallbackInfo callbackInfo = micromesh::MessageCallbackInfo())
     {
-        micromesh::Result result = micromesh::micromeshCreateOpContext(&config, &m_context, &callbackInfo);
-        assert(result == micromesh::Result::eSuccess);
+        [[maybe_unused]] micromesh::Result result = micromesh::micromeshCreateOpContext(&config, &m_context, &callbackInfo);
+        assert(result == micromesh::Result::eSuccess);  // Errors have already been printed with MLOGE()
     }
 
     ScopedOpContext(uint32_t numThreads, micromesh::MessageCallbackInfo callbackInfo = micromesh::MessageCallbackInfo())
@@ -173,7 +173,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpBuildMeshTopologyEnd(OpContext ct
 
 struct OpGrowTriangleSelection_input
 {
-    MeshTopology* topology = nullptr;
+    const MeshTopology* topology = nullptr;
 
     // either use a range of triangles to seed
     uint32_t triangleFirst = 0;

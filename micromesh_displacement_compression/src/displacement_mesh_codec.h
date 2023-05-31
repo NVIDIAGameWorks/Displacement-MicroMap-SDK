@@ -118,12 +118,12 @@ class MeshEncoder
 
         struct EdgeInfo
         {
-            uint32_t                     numBaseSegments;  // number of segments of the associated base triangle
+            uint32_t numBaseSegments{};          // number of segments of the associated base triangle
             std::array<BaryUV_uint16, 2> barys;  // edge endpoints barycentric coordinates in the space of the base triangle
-            int32_t outerEdgeStart;  // [Only valid for outer edges] parametric starting point of the outer edge
-            int32_t outerEdgeStop;   // [Only valid for outer edges] parametric stopping point of the outer edge
-            uint8_t baseEdgeIdx;     // [Only valid for outer edges] edge index (i.e. 0 -> u, 1 -> v, 2 -> w)
-            bool    isOuterEdge;     // is this edge (possibly) shared with another base triangle?
+            int32_t outerEdgeStart{};     // [Only valid for outer edges] parametric starting point of the outer edge
+            int32_t outerEdgeStop{};      // [Only valid for outer edges] parametric stopping point of the outer edge
+            uint8_t baseEdgeIdx{};        // [Only valid for outer edges] edge index (i.e. 0 -> u, 1 -> v, 2 -> w)
+            bool    isOuterEdge = false;  // is this edge (possibly) shared with another base triangle?
         };
 
         const EdgeInfo& getEdgeInfo(uint32_t localEdgeIdx) const { return m_edges[localEdgeIdx]; }

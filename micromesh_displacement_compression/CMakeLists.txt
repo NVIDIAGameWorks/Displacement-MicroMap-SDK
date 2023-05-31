@@ -73,8 +73,8 @@ install(TARGETS micromesh_displacement_compression DESTINATION "lib" EXPORT "mic
 
 # tests
 
-set(MICROMESH_DISPLACEMENT_COMRESSION_BUILD_TESTS OFF CACHE BOOL "Build the unit tests for micromesh_displacement_compression")
-if(MICROMESH_DISPLACEMENT_COMRESSION_BUILD_TESTS)
+set(MICROMESH_DISPLACEMENT_COMPRESSION_BUILD_TESTS OFF CACHE BOOL "Build the unit tests for micromesh_displacement_compression")
+if(MICROMESH_DISPLACEMENT_COMPRESSION_BUILD_TESTS)
     set(TEST_FILES test/test_compression.cpp)
     source_group("tests" FILES ${TEST_FILES})
     add_executable(micromesh_displacement_compression_test ${TEST_FILES})

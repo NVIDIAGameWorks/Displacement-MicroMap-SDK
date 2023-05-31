@@ -331,7 +331,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpBuildMeshTopologyEnd(OpContext ct
 
 struct OpGrowTriangleSelectionPayload
 {
-    OpGrowTriangleSelectionPayload(MeshTopology& topo)
+    OpGrowTriangleSelectionPayload(const MeshTopology& topo)
         : topoUtil(topo)
     {
     }
@@ -1303,9 +1303,16 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpAdaptiveSubdivision(OpContext    
     CHECK_NONNULL(ctx, output);
     CHECK_CTX_BEGIN(ctx);
 
-    bool useUV       = arrayIsValid(input->meshVertexTexcoords) && !arrayIsEmpty(input->meshVertexTexcoords);
-    bool useArea     = input->useArea;
-    bool useRelative = input->useRelativeValues || input->onlyComputeRelativeMaxValue;
+    bool useUV        = arrayIsValid(input->meshVertexTexcoords) && !arrayIsEmpty(input->meshVertexTexcoords);
+    bool hasPositions = arrayIsValid(input->meshVertexPositions) && !arrayIsEmpty(input->meshVertexPositions);
+    bool useArea      = input->useArea;
+    bool useRelative  = input->useRelativeValues || input->onlyComputeRelativeMaxValue;
+
+    if(!useUV && !hasPositions)
+    {
+        LOGE(ctx, "Generating subdivision levels requires vertex positions or texture coordinates. None given.");
+        return Result::eInvalidValue;
+    }
 
     OpAdaptiveSubdivisionPayload payload;
     payload.input   = *input;

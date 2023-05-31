@@ -46,7 +46,7 @@ void printBitsIfVerbose(const micromesh::container::vector<T> data)
 #endif
 }
 
-void printBlockArrayIfVerbose(const uint16_t* data, const uint32_t subdivLevel)
+void printBlockArrayIfVerbose(const uint16_t* data, const uint32_t subdivLevel, micromesh::PFN_getMicroVertexIndex getMicroVertexIndex = nullptr)
 {
 #ifdef DIAG_VERBOSE
     const uint32_t numSegments = 1u << subdivLevel;
@@ -57,7 +57,16 @@ void printBlockArrayIfVerbose(const uint16_t* data, const uint32_t subdivLevel)
         {
             if(u + v < numSegments + 1)
             {
-                printf("%-4u ", data[micromesh::umajorUVtoLinear(u, v, subdivLevel)]);
+                uint32_t index = 0;
+                if(getMicroVertexIndex)
+                {
+                    index = getMicroVertexIndex(u, v, subdivLevel, nullptr);
+                }
+                else
+                {
+                    index = micromesh::umajorUVtoLinear(u, v, subdivLevel);
+                }
+                printf("%-4u ", data[index]);
             }
         }
         printf("\n");

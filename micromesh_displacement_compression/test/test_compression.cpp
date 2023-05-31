@@ -12,6 +12,7 @@
 #include <array>
 #include <chrono>
 #include <cstdlib>
+#include <limits>
 #include <random>
 #include <string.h>
 #include <vector>
@@ -29,7 +30,10 @@
 #undef NDEBUG
 
 using namespace micromesh;
-std::default_random_engine gen(1);  // Ensure the RNG is seeded so tests are reproducible
+// Ensure the RNG is seeded so tests are reproducible.
+// Note, though: since C++'s distributions are implementation-defined,
+// these tests will not test the same data given different standard libraries.
+std::default_random_engine gen(1);
 
 static const std::array<BlockFormatDispC1, 3> allBlockFormats{BlockFormatDispC1::eR11_unorm_lvl3_pack512,
                                                               BlockFormatDispC1::eR11_unorm_lvl4_pack1024,
@@ -236,7 +240,7 @@ bool blockCorrectMath()
         // What does BlockEncoder::correct return?
         const int16_t reported = dispenc::correct(prediction, reference, shift, correctionBits);
 
-        const uint16_t distance = std::abs(reference - (2047 & (prediction + (reported << shift))));
+        const uint16_t distance = std::abs(reference - (2047 & (prediction + (reported * (int16_t(1) << shift)))));
         // Is there a value that gives a better distance?
         const int16_t minV = -(1 << (correctionBits - 1));
         const int16_t maxV = (1 << (correctionBits - 1)) - 1;
@@ -244,7 +248,7 @@ bool blockCorrectMath()
         TEST_TRUE((reported >= minV) && (reported <= maxV));
         for(int16_t v = minV; v <= maxV; v++)
         {
-            uint16_t myDistance = std::abs(reference - (2047 & (prediction + (v << shift))));
+            uint16_t myDistance = std::abs(reference - (2047 & (prediction + (v * (int16_t(1) << shift)))));
             if(myDistance < distance)
             {
                 printf("BlockEncoder::correct(%i, %i, %u, %u) returned %i, but %i was closer!", prediction, reference,
@@ -623,7 +627,7 @@ bool perfectMeshReencoding(OpContext ctx)
     std::uniform_int_distribution<uint32_t> distBool(0, 1);
     const uint16_t                          MAX_SUBDIV = 7;
     std::poisson_distribution<uint16_t>     distSubdivUnclamped(4);
-    std::uniform_int_distribution<uint16_t> distValues(0, (1 << 11) - 1);
+    std::uniform_real_distribution<float>   distValues(0, 1.0f);
     std::uniform_real_distribution<float>   distPSNR(0.0f, 50.0f);
 
     // Collect some information about subdivision levels and formats used.
@@ -631,11 +635,10 @@ bool perfectMeshReencoding(OpContext ctx)
     std::vector<size_t> blockFmtsUsed(size_t(BlockFormatDispC1::eR11_unorm_lvl5_pack1024) + 1);
 
     // Do some number of random tests.
-    for(uint32_t test = 0; test < 100; test++)
+    for(uint32_t test = 0; test < 500; test++)
     {
         // Now, generate the uncompressed data M_0.
-        // This will be somewhat ill-formed, since I want to really see how this
-        // can break.
+        // Start with floating-point values so we can sanitize them.
         Micromap micromap0;
         micromap0.frequency           = Frequency::ePerMicroVertex;
         micromap0.valueFloatExpansion = MicromapValueFloatExpansion{};
@@ -663,36 +666,57 @@ bool perfectMeshReencoding(OpContext ctx)
         TEST_SUCCESS(micromeshOpSanitizeSubdivLevels(ctx, &sanitizeSubdivInput, &sanitizeSubdivOutput));
 
         arraySetDataVec(micromap0.triangleSubdivLevels, m0TriangleSubdivLevels);
-        // Generate random values. Note that not only will the triangles likely
-        // mismatch along edges - they also likely will have overlapping value
-        // ranges (e.g. triangles will start in the middle of other triangles'
-        // data)! This is likely invalid to write to a .bary file, but let's
-        // see if we can handle it.
-        const size_t valuesForLargestTriangle = subdivLevelGetVertexCount(micromap0.maxSubdivLevel);
-        std::uniform_int_distribution<size_t> distValueCount(valuesForLargestTriangle, 2 * valuesForLargestTriangle);
-        std::vector<uint16_t>                 m0Values(distValueCount(gen));
-        for(uint16_t& v : m0Values)
-        {
-            v = distValues(gen);
-        }
-        micromap0.values.byteStride = 2;
-        micromap0.values.count      = m0Values.size();
-        micromap0.values.data       = m0Values.data();
-        micromap0.values.format     = micromesh::Format::eR11_unorm_pack16;
+        // Generate random values.
         std::vector<uint32_t> m0ValueOffsets(NUM_TRIANGLES);
         for(size_t tri = 0; tri < NUM_TRIANGLES; tri++)
         {
             const uint32_t numValuesRequired = subdivLevelGetVertexCount(m0TriangleSubdivLevels[tri]);
-            std::uniform_int_distribution<uint32_t> distValueOffset(0, uint32_t(m0Values.size() - numValuesRequired));
-            m0ValueOffsets[tri] = distValueOffset(gen);
+            m0ValueOffsets[tri]              = uint32_t(micromap0.values.count);
+            micromap0.values.count += numValuesRequired;
         }
         arraySetDataVec(micromap0.triangleValueIndexOffsets, m0ValueOffsets);
+        std::vector<float> m0FloatValues(micromap0.values.count);
+        for(float& v : m0FloatValues)
+        {
+            v = distValues(gen);
+        }
+        micromap0.values.byteStride = 4;
+        micromap0.values.data       = m0FloatValues.data();
+        micromap0.values.format     = micromesh::Format::eR32_sfloat;
+
+        // Now, we make sure the values are watertight along edges by doing
+        // a very basic form of edge sanitization. (For a smoother edge
+        // sanitization method that works on float values, see
+        // micromeshOpSanitizeEdgeValues().)
+        // The nice consistency property of this compressor depends upon the
+        // input data being watertight. If that assumption breaks, there's no
+        // guarantee.
+        // At a lower level, edge propagation doesn't propagate data
+        // (in particular, anchors) from other triangles' subtriangles to
+        // interior subtriangles, which means that interior and boundary
+        // subtriangles can have different reference data along shared
+        // subtriangle edges during compression. This means they won't
+        // necessarily compress their common edge the same way.
+        OpSanitizeEdgeValues_input sanitizeInput{};
+        sanitizeInput.meshTopology = &topoBuilder.topology;
+        TEST_SUCCESS(micromeshOpSanitizeEdgeValues(ctx, &sanitizeInput, &micromap0));
+
+        // Now convert from floating-point to UNORM11.
+        std::vector<uint16_t> m0Unorm11Values(micromap0.values.count);
+        for(size_t i = 0; i < micromap0.values.count; i++)
+        {
+            m0Unorm11Values[i] = uint16_t(std::min(2047.f, 2048.f * m0FloatValues[i]));
+        }
+        micromap0.values.byteStride = 2;
+        micromap0.values.data       = m0Unorm11Values.data();
+        micromap0.values.format     = micromesh::Format::eR11_unorm_pack16;
+
 
         // Create random settings.
         OpCompressDisplacement_settings settings{};
         settings.minimumPSNR              = distPSNR(gen);
-        settings.validateInputs           = false;
-        settings.validateOutputs          = false;
+        settings.validateInputs           = true;
+        settings.validateOutputs          = true;
         settings.requireLosslessMeshEdges = false;
 
 
@@ -734,8 +758,8 @@ bool perfectMeshReencoding(OpContext ctx)
         // Re-encode it to get E_1 := encode(M_1, S').
         // We require perfect re-encoding here (so that we hopefully choose the
         // same compression formats), so set the minimum PSNR to a really large
-        // number (TODO: Test if +infinity works)
-        settings.minimumPSNR = 1000.0f;
+        // number
+        settings.minimumPSNR = std::numeric_limits<float>::infinity();
         MicromapCompressed            e1{};
         OpCompressDisplacement_input  e1Input{};
         OpCompressDisplacement_output e1Output{};
@@ -754,8 +778,26 @@ bool perfectMeshReencoding(OpContext ctx)
         e1.triangleValueByteOffsets.data = e1TriangleValueByteOffsets.data();
         TEST_SUCCESS(micromeshOpCompressDisplacementEnd(ctx, &e1Output));
 
+        // Finally, decode it to get M_2 := decode(E_1), and check that M_1 == M_2.
+        Micromap m2{};
+        m2.layout = micromap0.layout;
+        TEST_SUCCESS(micromeshOpDecompressDisplacementBegin(ctx, &e1, &m2));
+        m2.valueFloatExpansion = m1.valueFloatExpansion;
+        std::vector<uint16_t> m2Values(m2.values.count);
+        m2.values.data       = m2Values.data();
+        m2.values.byteStride = 2;
+        std::vector<uint16_t> m2TriangleSubdivLevels(m2.triangleSubdivLevels.count);
+        m2.triangleSubdivLevels.data = m2TriangleSubdivLevels.data();
+        std::vector<uint32_t> m2TriangleValueIndexOffsets(m2.triangleValueIndexOffsets.count);
+        m2.triangleValueIndexOffsets.data = m2TriangleValueIndexOffsets.data();
+        TEST_SUCCESS(micromeshOpDecompressDisplacementEnd(ctx, &m2));
 
-        // And now, check that E_0 == E_1
+        TEST_TRUE(m1.values.count == m2.values.count);
+        for(uint64_t i = 0; i < m2.values.count; i++)
+        {
+            TEST_TRUE(m1Values[i] == m2Values[i]);
+        }
+
         for(uint64_t i = 0; i < e1.triangleSubdivLevels.count; i++)
         {
             TEST_TRUE(e0TriangleSubdivLevels[i] == e1TriangleSubdivLevels[i]);
@@ -770,21 +812,6 @@ bool perfectMeshReencoding(OpContext ctx)
         {
             TEST_TRUE(e0TriangleValueByteOffsets[i] == e1TriangleValueByteOffsets[i]);
         }
-        // Because our data has so many discontinuities, we will occasionally
-        // get value mismatches. These appear to be okay, and I haven't worked
-        // out exactly where they're coming from - my guess is the edge
-        // propagation step modifies triangle data, then unsuccessfully undoes
-        // it. If there was a major error in CompressDisplacement, this would
-        // be large.
-        uint64_t mismatchCount = 0;
-        for(uint64_t i = 0; i < e1.values.count; i++)
-        {
-            if(e0Values[i] != e1Values[i])
-            {
-                mismatchCount++;
-            }
-        }
-        TEST_TRUE(mismatchCount <= 64);
     }
 
 #ifdef DIAG_VERBOSE
@@ -866,14 +893,11 @@ void benchmark(const char* benchmarkName, LambdaFunction func)
     printf("%s:\tmean = %f\tstandard_deviation = %f\t(seconds)\truns = %zu\n", benchmarkName, runningMean, runningStddev, runCount);
 }
 
-int main(int argc, const char** argv)
+bool runTests(OpContext& context)
 {
-    OpContext context;
-    {
-        OpConfig config;
-        config.threadCount = 2;
-        TEST_SUCCESS(micromeshCreateOpContext(&config, &context, &messenger));
-    }
+    OpConfig config;
+    config.threadCount = 2;
+    TEST_SUCCESS(micromeshCreateOpContext(&config, &context, &messenger));
 
     TEST_TRUE(blockCorrectMath());
     TEST_TRUE(docExampleBlockEncoder());
@@ -881,13 +905,42 @@ int main(int argc, const char** argv)
     TEST_TRUE(perfectReencoding());
     TEST_TRUE(docExampleEncodeTwoTriangles(context));
     TEST_TRUE(perfectMeshReencoding(context));
+    return true;
+}
 
-    printf("All tests passed. Running microbenchmarks...\n");
+int main(int argc, const char** argv)
+{
+    bool doBenchmarks = true;
+    for(int i = 1; i < argc; i++)
+    {
+        const char* arg = argv[i];
+        if(strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0)
+        {
+            printf("micromesh_displacement_compression_test - Evaluates DMM compression algorithms.\n");
+            printf("Usage: micromesh_displacement_compression_test [flags]\n");
+            printf("-h | --help: Print this text\n");
+            printf("--no-benchmarks: Do not run microbenchmarks after testing.\n");
+        }
+        else if(strcmp(arg, "--no-benchmarks") == 0)
+        {
+            doBenchmarks = false;
+        }
+    }
 
-    benchmark("encodeRandomBlocks", encodeRandomBlocks);
+    OpContext context;
+    if(!runTests(context))
+    {
+        return EXIT_FAILURE;
+    }
+    printf("All tests passed.\n");
+
+    if(doBenchmarks)
+    {
+        printf("Running microbenchmarks...\n");
+        benchmark("encodeRandomBlocks", encodeRandomBlocks);
+        printf("Done.\n");
+    }
 
     micromeshDestroyOpContext(context);
-
-    printf("Done.\n");
     return 0;
 }

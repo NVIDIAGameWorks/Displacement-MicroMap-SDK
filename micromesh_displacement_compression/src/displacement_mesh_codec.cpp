@@ -910,10 +910,12 @@ bool MeshEncoder::Triangle::satisfiesCompressionControl(const BlockFormatDispC1 
             for(uint32_t i = 0; i < numVtxPerEdge; i += 2)
             {
                 const uint32_t coordAddr = addr((uint32_t)coords[0], (uint32_t)coords[1]);
-                if(m_reference[coordAddr] != m_intermediate.m_decoded[coordAddr])
+                if (m_reference[coordAddr] != m_intermediate.m_decoded[coordAddr])
                     return false;
-                coords[0] += delta[0] << 1;
-                coords[1] += delta[1] << 1;
+                // This multiplication by 2 instead of a left shift by 1 is
+                // important: left shifting a negative integer is UB in C++.
+                coords[0] += delta[0] * 2;
+                coords[1] += delta[1] * 2;
             }
         }
     }

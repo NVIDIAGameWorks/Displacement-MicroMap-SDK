@@ -20,6 +20,12 @@ automatic threading within the context.
 - [`micromesh_displacement_compression`](/micromesh_displacement_compression/README.md): Library that handles the compression of displacement micromaps.
 - [`micromesh_displacement_remeshing`](/micromesh_displacement_remeshing/README.md): Library for GPU-based remeshing (currently only a Vulkan/SPIR-V based implementation for the GPU exists).
 
+## About the Latest Release (2.0)
+
+- API break: micromesh::OpGrowTriangleSelection_input::topology is now a const array
+- Fix UB in compressor due to possible negative shifts
+- Step towards remesher determinism
+
 ## Support Contact
 
 Feel free to file issues directly on the GitHub page or reach out to NVIDIA at

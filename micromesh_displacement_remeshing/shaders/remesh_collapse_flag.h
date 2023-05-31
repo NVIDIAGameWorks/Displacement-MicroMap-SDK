@@ -18,7 +18,7 @@
 #include "remesh_common.h"
 
 
-uint unpackEdgeIndex(uint64_t edgeDesc)
+uint unpackEdgeId(uint64_t edgeDesc)
 {
     u32vec2 e = unpack32(edgeDesc);
     return e.x;
@@ -29,9 +29,9 @@ uint unpackEdgeIndex(uint64_t edgeDesc)
 // it corresponds to edgeIndex
 bool isMinEdge(RM_DATA_ARG uint triIndex, uint edgeIndex)
 {
-    uint minEdge = unpackEdgeIndex(RM_DATA(scratchTriangleDescs)[triIndex]);
+    uint minEdge = unpackEdgeId(RM_DATA(scratchTriangleDescs)[triIndex]);
     if(minEdge != ~0u)
-        return minEdge == edgeIndex;
+        return minEdge == computeEdgeId(reGetVertices(edgeIndex));
     return true;
 }
 

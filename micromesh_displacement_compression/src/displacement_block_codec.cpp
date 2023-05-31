@@ -372,8 +372,11 @@ void blockEncode(BlockFormatDispC1 fmtC1, const uint32_t subdivLevel, const uint
                 const uint32_t vtype               = uint32_t(getVertexType(newVtxIdx, numSegments));
                 const uint32_t shift               = (subdLevel <= 1) ? 0 : subd_level_shifts->vertex[vtype];
                 result.m_corrections[new_vtx_addr] = correct(prediction, reference[new_vtx_addr], shift, numCorrectionBits);
+                // You may wonder why we write a multiplication by a power of 2
+                // here instead of a left shift. It turns out that left shifts
+                // of negative integers invoke undefined behavior.
                 result.m_decoded[new_vtx_addr] =
-                    (int32_t)(decoderWordMask & (prediction + (result.m_corrections[new_vtx_addr] << shift)));
+                    (int32_t)(decoderWordMask & (prediction + (result.m_corrections[new_vtx_addr] * (int16_t(1) << shift))));
             });
 
             // Move to the next (finer) subdivision level
@@ -600,7 +603,7 @@ void blockDecode(Format family, BlockFormatDispC1 fmt, const uint32_t subdivLeve
                 const int32_t correction = readUpTo16Bits(corrections, corrTableBitAddr[new_vtx_table_index], numBitsToDecode);
                 const uint32_t vtype  = uint32_t(getVertexType(newVtxIdx, numSegments));
                 const uint32_t shift  = (thisSubdLevel <= 1) ? 0 : shiftLevel->vertex[vtype];
-                decoded[new_vtx_addr] = (int32_t)(decoderWordMask & (prediction + (correction << shift)));
+                decoded[new_vtx_addr] = (int32_t)(decoderWordMask & (prediction + (correction * (int16_t(1) << shift))));
             });
 
             // Move to the next (finer) subdivision level

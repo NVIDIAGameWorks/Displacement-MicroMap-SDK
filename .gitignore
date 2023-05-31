@@ -13,3 +13,6 @@ _inst*/
 *.vcxproj.filters
 *.vcxproj.user
 cmake_build
+micromesh_displacement_remeshing/cmake_build
+micromesh_displacement_remeshing/_autogen/
+micromesh_displacement_remeshing/b/
