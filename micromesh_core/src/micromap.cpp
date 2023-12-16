@@ -376,7 +376,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpPack(OpContext ctx, const Microma
             {
                 uint32_t valueIdxIn              = arrayGetV<uint32_t>(input->triangleValueIndexOffsets, idx);
                 uint32_t valueIdxOut             = arrayGetV<uint32_t>(output->triangleValueByteOffsets, idx);
-                uint32_t* __restrict triangleOut = arrayGet<uint32_t>(output->values, valueIdxOut * 4);
+                uint32_t* __restrict triangleOut = arrayGet<uint32_t>(output->values, valueIdxOut);
 
                 uint32_t count = subdivLevelGetCount(arrayGetV<uint16_t>(output->triangleSubdivLevels, idx), output->frequency);
 
@@ -398,7 +398,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpPack(OpContext ctx, const Microma
             {
                 uint32_t valueIdxIn              = arrayGetV<uint32_t>(input->triangleValueIndexOffsets, idx);
                 uint32_t valueIdxOut             = arrayGetV<uint32_t>(output->triangleValueByteOffsets, idx);
-                uint32_t* __restrict triangleOut = arrayGet<uint32_t>(output->values, valueIdxOut * 4);
+                uint32_t* __restrict triangleOut = arrayGet<uint32_t>(output->values, valueIdxOut);
 
                 uint32_t count = subdivLevelGetCount(arrayGetV<uint16_t>(output->triangleSubdivLevels, idx), output->frequency);
 
@@ -431,7 +431,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpUnpack(OpContext ctx, const Micro
             {
                 uint32_t valueIdxIn                   = arrayGetV<uint32_t>(input->triangleValueByteOffsets, idx);
                 uint32_t valueIdxOut                  = arrayGetV<uint32_t>(output->triangleValueIndexOffsets, idx);
-                const uint32_t* __restrict triangleIn = arrayGet<uint32_t>(input->values, valueIdxIn * 4);
+                const uint32_t* __restrict triangleIn = arrayGet<uint32_t>(input->values, valueIdxIn);
 
                 uint32_t count = subdivLevelGetCount(arrayGetV<uint16_t>(output->triangleSubdivLevels, idx), output->frequency);
 
@@ -453,7 +453,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpUnpack(OpContext ctx, const Micro
             {
                 uint32_t valueIdxIn                   = arrayGetV<uint32_t>(input->triangleValueByteOffsets, idx);
                 uint32_t valueIdxOut                  = arrayGetV<uint32_t>(output->triangleValueIndexOffsets, idx);
-                const uint32_t* __restrict triangleIn = arrayGet<uint32_t>(input->values, valueIdxIn * 4);
+                const uint32_t* __restrict triangleIn = arrayGet<uint32_t>(input->values, valueIdxIn);
 
                 uint32_t count = subdivLevelGetCount(arrayGetV<uint16_t>(output->triangleSubdivLevels, idx), output->frequency);
 
@@ -565,6 +565,100 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpChangeLayout(OpContext ctx, const
                 void* newValues = arrayGet<void>(modified->values, valueOffset + newIdx);
                 memcpy(newValues, tempValues + (newIdx * byteSize), byteSize);
             }
+        }
+    });
+
+    modified->layout = *newLayout;
+
+    return Result::eSuccess;
+}
+
+MICROMESH_API Result MICROMESH_CALL micromeshOpChangeLayoutPacked(OpContext ctx, const MicromapLayout* newLayout, MicromapPacked* modified)
+{
+    CHECK_CTX_NONNULL(ctx);
+    CHECK_NONNULL(ctx, newLayout);
+    CHECK_NONNULL(ctx, modified);
+    CHECK_CTX_BEGIN(ctx);
+
+    uint32_t maxValues = subdivLevelGetCount(modified->maxSubdivLevel, modified->frequency);
+
+    const MicromapLayout* oldLayout = &modified->layout;
+
+    if((modified->values.format != Format::eR11_unorm_packed_align32 || modified->values.byteStride != 1))
+    {
+        return Result::eInvalidFormat;
+    }
+
+    uint32_t                   threadValues = packedCountBytesR11UnormPackedAlign32(maxValues);
+    container::vector<uint8_t> mapValues(ctx->getThreadCount() * threadValues);
+
+    ctx->parallel_item_ranges(modified->triangleSubdivLevels.count, [&](uint64_t idxFirst, uint64_t idxLast,
+                                                                        uint32_t threadIndex, void* userData) {
+        for(uint64_t idx = idxFirst; idx < idxLast; idx++)
+        {
+            uint32_t valueOffset = arrayGetV<uint32_t>(modified->triangleValueByteOffsets, idx);
+            uint32_t subdivLevel = arrayGetV<uint16_t>(modified->triangleSubdivLevels, idx);
+
+            uint32_t numVertices  = subdivLevelGetVertexCount(subdivLevel);
+            uint32_t numTriangles = subdivLevelGetTriangleCount(subdivLevel);
+
+            uint32_t numSegmentsPerEdge = subdivLevelGetSegmentCount(subdivLevel);
+            uint32_t numVtxPerEdge      = subdivLevelGetSegmentCount(subdivLevel) + 1;
+
+            uint8_t* tempValues = mapValues.data() + (threadIndex * threadValues);
+
+            uint32_t valueCount = 0;
+
+            // read from values into scratch per-thread data
+            // from old layout into new layout ordering
+
+            void* oldValues = arrayGet<void>(modified->values, valueOffset);
+
+            if(modified->frequency == Frequency::ePerMicroVertex)
+            {
+                valueCount = numVertices;
+
+                for(uint32_t u = 0; u < numVtxPerEdge; u++)
+                {
+                    for(uint32_t v = 0; v < numVtxPerEdge - u; v++)
+                    {
+                        uint32_t oldIdx = oldLayout->pfnGetMicroVertexIndex(u, v, subdivLevel, oldLayout->userData);
+                        uint32_t newIdx = newLayout->pfnGetMicroVertexIndex(u, v, subdivLevel, newLayout->userData);
+
+                        uint32_t oldValue = packedReadR11UnormPackedAlign32(oldValues, oldIdx);
+                        packedWriteR11UnormPackedAlign32(tempValues, newIdx, oldValue);
+                    }
+                }
+            }
+            else
+            {
+                valueCount = numTriangles;
+
+                for(uint32_t u = 0; u < numSegmentsPerEdge; u++)
+                {
+                    for(uint32_t v = 0; v < numSegmentsPerEdge - u; v++)
+                    {
+                        {
+                            uint32_t oldIdx = oldLayout->pfnGetMicroTriangleIndex(u, v, 0, subdivLevel, oldLayout->userData);
+                            uint32_t newIdx = newLayout->pfnGetMicroTriangleIndex(u, v, 0, subdivLevel, newLayout->userData);
+
+                            uint32_t oldValue = packedReadR11UnormPackedAlign32(oldValues, oldIdx);
+                            packedWriteR11UnormPackedAlign32(tempValues, newIdx, oldValue);
+                        }
+                        if(v != numSegmentsPerEdge - u - 1)
+                        {
+                            uint32_t oldIdx = oldLayout->pfnGetMicroTriangleIndex(u, v, 1, subdivLevel, oldLayout->userData);
+                            uint32_t newIdx = newLayout->pfnGetMicroTriangleIndex(u, v, 1, subdivLevel, newLayout->userData);
+
+                            uint32_t oldValue = packedReadR11UnormPackedAlign32(oldValues, oldIdx);
+                            packedWriteR11UnormPackedAlign32(tempValues, newIdx, oldValue);
+                        }
+                    }
+                }
+            }
+
+            // write from per-thread, now in new order, back to values
+            memcpy(oldValues, tempValues, packedCountBytesR11UnormPackedAlign32(valueCount));
         }
     });
 

@@ -62,8 +62,8 @@ macro(_compile_GLSL_flags _SOURCE _OUTPUT _FLAGS SOURCE_LIST OUTPUT_LIST)
   endif()
   LIST(APPEND ${SOURCE_LIST} ${_SOURCE})
   LIST(APPEND ${OUTPUT_LIST} ${_OUTPUT})
-  if(GLSLANGVALIDATOR)
-    set(_COMMAND ${GLSLANGVALIDATOR} --target-env ${VULKAN_TARGET_ENV} -o ${_OUTPUT} ${_FLAGS} ${_SOURCE})
+  if(Vulkan_GLSLANG_VALIDATOR_EXECUTABLE)
+    set(_COMMAND ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE} --target-env ${VULKAN_TARGET_ENV} -o ${_OUTPUT} ${_FLAGS} ${_SOURCE})
     add_custom_command(
       OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/${_OUTPUT}
       COMMAND echo ${_COMMAND}
@@ -71,9 +71,9 @@ macro(_compile_GLSL_flags _SOURCE _OUTPUT _FLAGS SOURCE_LIST OUTPUT_LIST)
       MAIN_DEPENDENCY ${_SOURCE}
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       )
-  else(GLSLANGVALIDATOR)
-    MESSAGE(WARNING "could not find GLSLANGVALIDATOR to compile shaders")
-  endif(GLSLANGVALIDATOR)
+  else(Vulkan_GLSLANG_VALIDATOR_EXECUTABLE)
+    MESSAGE(WARNING "could not find Vulkan_GLSLANG_VALIDATOR_EXECUTABLE to compile shaders")
+  endif(Vulkan_GLSLANG_VALIDATOR_EXECUTABLE)
 endmacro()
 
 #####################################################################################
@@ -171,8 +171,8 @@ function(compile_glsl)
   cmake_parse_arguments(COMPILE  "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
   # Check if the GLSL compiler is present
-  if(NOT GLSLANGVALIDATOR)
-    message(ERROR "Could not find GLSLANGVALIDATOR to compile shaders")
+  if(NOT Vulkan_GLSLANG_VALIDATOR_EXECUTABLE)
+    message(ERROR "Could not find Vulkan_GLSLANG_VALIDATOR_EXECUTABLE to compile shaders")
     return()
   endif()
 
@@ -229,8 +229,8 @@ function(compile_glsl)
     add_custom_command(
          PRE_BUILD
          OUTPUT ${GLSL_OUT}
-         COMMAND echo ${GLSLANGVALIDATOR} ${COMPILE_CMD}
-         COMMAND ${GLSLANGVALIDATOR} ${COMPILE_CMD}
+         COMMAND echo ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE} ${COMPILE_CMD}
+         COMMAND ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE} ${COMPILE_CMD}
          MAIN_DEPENDENCY ${GLSL_SRC}
          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
          DEPENDS ${GLSL_DEPENDENCY}

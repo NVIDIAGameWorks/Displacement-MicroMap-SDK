@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
 
-project(micromesh_core VERSION 2.0.0)
+project(micromesh_core VERSION 2.1.0)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 

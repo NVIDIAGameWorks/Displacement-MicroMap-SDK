@@ -307,7 +307,7 @@ struct VertexGenerateInfo
     // null, return this value.
     uint32_t nonDedupIndex;
 
-    // input mesh
+    // input mesh triangle
     uint32_t meshTriangleIndex;
     // input micromap (if provided)
     uint32_t micromapTriangleIndex;
@@ -347,6 +347,49 @@ typedef uint32_t (*PFN_generateVertex)(const VertexGenerateInfo* vertexInfo,
                                        void*                     beginTriangleResult,
                                        void*                     userData);
 
+struct TriangleVerticesInfo
+{
+    // input mesh triangle
+    uint32_t meshTriangleIndex;
+    // input micromap (if provided)
+    uint32_t micromapTriangleIndex;
+
+    // output mesh
+
+    // prefix sum over all output mesh triangles and
+    // provides the offset if a global triangleIndices buffer was used.
+    uint32_t outTrianglesOffset;
+
+    // how much triangles are needed
+    uint32_t outTrianglesCount;
+
+    // prefix sum over all output mesh vertices and provides offset into
+    // global vertex buffer if useVertexDeduplication == false
+    uint32_t outVerticesOffset;
+
+    // how much vertices are needed
+    uint32_t outVerticesCount;
+};
+
+// This function allows to provide the output space where the triangle vertex indices are stored.
+// It also allows to override the base `VertexGenerateInfo::nonDedupIndex` per triangle, which
+// this function must return. One typical use-case for this function is to help decoding the tessellated
+// micromesh into per-thread temporary vertex- and index arrays. This can be achieved by 
+// setting `useVertexDeduplication` to false, providing a per-thread local triangle vertices array and returning zero.
+//
+// The function must write content of `outTriangleVertices` which is indexed `0 <= t < outTrianglesCount`.
+// and return the base value for `nonVertexDedup`.
+//
+// If this function is not used, the default behavior is as follows:
+//   - `outTriangleVertices` is filled with `OpTessellateMesh_output::meshTriangleVertices` and offset by `outTrianglesOffset`
+//   - it returns `outVerticesOffset`
+
+typedef uint32_t (*PFN_provideTriangleVertices)(const TriangleVerticesInfo* triangleVerticesInfo,
+                                                ArrayInfo_uint32_3*         outTriangleVertices,
+                                                uint32_t                    threadIndex,
+                                                void*                       beginTriangleResult,
+                                                void*                       userData);
+
 struct OpTessellateMesh_input
 {
     bool     useVertexDeduplication = true;
@@ -371,11 +414,33 @@ struct OpTessellateMesh_input
     // optional, can aid decoding local data for specific triangles
     PFN_beginTriangle pfnBeginTriangle = nullptr;
     PFN_endTriangle   pfnEndTriangle   = nullptr;
+
+    // optional
+    // if null, then indices are written into OpTessellateMesh_output::meshTriangleVertices.data
+    // otherwise the output space can be provided on a per-triangle basis, see callback description and below.
+    PFN_provideTriangleVertices pfnProvideTriangleVertices = nullptr;
+
+    // the canonical order of callbacks is:
+    //
+    //   void* beginTriangleResult = pfnBeginTriangle(... threadIndex, userData);
+    //
+    //   ArrayInfo_uint32_3 meshTriangleVertices = offset(output->meshTriangleVertices, outTrianglesOffset);
+    //   uint32_t nonDedupIndexBase = outVertexOffset;
+    //   nonDedupIndexBase = pfnProvideTriangleVertices({...}, &meshTriangleVertices, threadIndex, beginTriangleResult, userData);
+    //
+    //   for v < outVerticesCount {
+    //     localVertexIndices[v] = pfnGenerateVertex({...nonDedupIndexBase + v, ...}, ... threadIndex, beginTriangleResult, userData);
+    //   }
+    //   for t < outTrianglesCount {
+    //     meshTriangleVertices[t] = {localVertexIndices[localTriangleIndices[t * 3 + 0], ...};
+    //   }
+    //   pfnEndTriangle( ... threadIndex, beginTriangleResult, userData);
 };
 
 struct OpTessellateMesh_output
 {
-    uint32_t           vertexCount = 0;
+    uint32_t vertexCount = 0;
+    // if data is left empty, then `OpTessellateMesh_input::pfnProvideTriangleVertices` must be used
     ArrayInfo_uint32_3 meshTriangleVertices;
 };
 
@@ -710,8 +775,9 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpPack(OpContext ctx, const Microma
 
 // changes output.values
 // currently supported:
-// - from eR11_unorm_packed_align32 to eR16_unorm
+// - from eR11_unorm_packed_align32 to eR11_unorm_pack16
 // - from eR11_unorm_packed_align32 to eR8_unorm
+// use `micromeshMicromapSetupValues` with active computeTriangleValueIndexOffsets computation in advance on output
 MICROMESH_API Result MICROMESH_CALL micromeshOpUnpack(OpContext ctx, const MicromapPacked* input, Micromap* output);
 
 // changes output.values
@@ -725,6 +791,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpLowerBit(OpContext ctx, const Mic
 // values are re-ordered in-place
 MICROMESH_API Result MICROMESH_CALL micromeshOpChangeLayout(OpContext ctx, const MicromapLayout* newLayout, Micromap* modified);
 
+MICROMESH_API Result MICROMESH_CALL micromeshOpChangeLayoutPacked(OpContext ctx, const MicromapLayout* newLayout, MicromapPacked* modified);
 
 //////////////////////////////////////////////
 

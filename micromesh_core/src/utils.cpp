@@ -986,11 +986,11 @@ MICROMESH_API Result MICROMESH_CALL micromeshMicromapPackedSetupValues(MicromapP
     {
         if(computeTriangleValueByteOffsets)
         {
-            arraySetV<uint32_t>(micromap->triangleValueByteOffsets, i, count * 4);
+            arraySetV<uint32_t>(micromap->triangleValueByteOffsets, i, count);
         }
 
         uint32_t valueCount = subdivLevelGetCount(arrayGetV<uint16_t>(micromap->triangleSubdivLevels, i), micromap->frequency);
-        count += packedCountR11UnormPackedAlign32(valueCount);
+        count += packedCountBytesR11UnormPackedAlign32(valueCount);
     }
 
     micromap->values.count = count;

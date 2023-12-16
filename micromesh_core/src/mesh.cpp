@@ -118,7 +118,7 @@ class BuildMeshTopoPayload
     void addTriangle(uint32_t triIndex)
     {
         const Vector_uint32_3* triVertices = arrayGet<Vector_uint32_3>((const ArrayInfo&)m_topo->triangleVertices, triIndex);
-        Vector_uint32_3*       triEdges = arrayGet<Vector_uint32_3>((ArrayInfo&)m_topo->triangleEdges, triIndex);
+        Vector_uint32_3* triEdges = arrayGet<Vector_uint32_3>((ArrayInfo&)m_topo->triangleEdges, triIndex);
 
         uint32_t a = triVertices->x;
         uint32_t b = triVertices->y;
@@ -1079,6 +1079,15 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpTessellateMeshEnd(OpContext      
                 beginResult = input->pfnBeginTriangle(meshTri, mapTri, threadIndex, input->userData);
             }
 
+            // local output info
+            uint32_t vertexOffset = triOutput.vertexOffset;
+
+            ArrayInfo_uint32_3 meshTriangleVertices = output->meshTriangleVertices;
+            assert(meshTriangleVertices.count >= triOutput.triangleOffset);
+            meshTriangleVertices.count -= triOutput.triangleOffset;
+            meshTriangleVertices.data = reinterpret_cast<uint8_t*>(meshTriangleVertices.data)
+                                        + meshTriangleVertices.byteStride * triOutput.triangleOffset;
+
             if(config.edgeFlag != edgeFlag || config.subdivLevel != subdivLevel)
             {
                 // recalculate vertices and triangles
@@ -1145,6 +1154,20 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpTessellateMeshEnd(OpContext      
                 }
             }
 
+            if(input->pfnProvideTriangleVertices)
+            {
+                TriangleVerticesInfo triangleVerticesInfo;
+                triangleVerticesInfo.meshTriangleIndex     = meshTri;
+                triangleVerticesInfo.micromapTriangleIndex = mapTri;
+                triangleVerticesInfo.outVerticesCount      = config.vertexCount;
+                triangleVerticesInfo.outTrianglesCount     = config.triangleCount;
+                triangleVerticesInfo.outVerticesOffset     = triOutput.vertexOffset;
+                triangleVerticesInfo.outTrianglesOffset    = triOutput.triangleOffset;
+
+                vertexOffset = input->pfnProvideTriangleVertices(&triangleVerticesInfo, &meshTriangleVertices,
+                                                                 threadIndex, beginResult, input->userData);
+            }
+
             assert(config.vertexCount == (payload->triangles[meshTri + 1].vertexOffset - triOutput.vertexOffset));
             assert(config.triangleCount == (payload->triangles[meshTri + 1].triangleOffset - triOutput.triangleOffset));
 
@@ -1171,7 +1194,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpTessellateMeshEnd(OpContext      
                 }
                 else
                 {
-                    vertex.nonDedupIndex = triOutput.vertexOffset + i;
+                    vertex.nonDedupIndex = vertexOffset + i;
                 }
 
                 // let user generate the vertex and give us the vertex index
@@ -1187,7 +1210,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpTessellateMeshEnd(OpContext      
                 tri.x = config.vertexIndices[tri.x];
                 tri.y = config.vertexIndices[tri.y];
                 tri.z = config.vertexIndices[tri.z];
-                arraySetV<Vector_uint32_3>(output->meshTriangleVertices, triOutput.triangleOffset + i, tri);
+                arraySetV<Vector_uint32_3>(meshTriangleVertices, i, tri);
             }
 
             if(input->pfnEndTriangle)

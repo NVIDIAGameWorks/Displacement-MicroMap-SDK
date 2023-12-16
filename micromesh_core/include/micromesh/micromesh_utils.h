@@ -166,9 +166,9 @@ MICROMESH_API uint32_t MICROMESH_CALL micromeshBirdUVToLinearVertex(uint32_t u, 
 //////////////////////////////////////////////////////////////////////////
 // special packed format computations
 
-inline uint32_t packedCountR11UnormPackedAlign32(uint32_t numValues)
+inline uint32_t packedCountBytesR11UnormPackedAlign32(uint32_t numValues)
 {
-    return (numValues + 31) / 32;
+    return (((numValues * 11) + 31) / 32) * 4;
 }
 // `bitOffset` starts from data address provided, no range cap
 // `bitWidth` must be <= 32

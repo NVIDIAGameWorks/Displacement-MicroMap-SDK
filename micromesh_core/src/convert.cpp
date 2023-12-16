@@ -636,8 +636,8 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpFloatToQuantizedPacked(OpContext 
         uint32_t dataIndex = 0;
         for(uint64_t idx = 0; idx < output->triangleSubdivLevels.count; idx++)
         {
-            arraySetV(output->triangleValueByteOffsets, idx, dataIndex * 4);
-            dataIndex += packedCountR11UnormPackedAlign32(
+            arraySetV(output->triangleValueByteOffsets, idx, dataIndex);
+            dataIndex += packedCountBytesR11UnormPackedAlign32(
                 subdivLevelGetCount(arrayGetV<uint16_t>(output->triangleSubdivLevels, idx), output->frequency));
         }
 
@@ -647,7 +647,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpFloatToQuantizedPacked(OpContext 
             {
                 uint32_t valueIdxIn              = arrayGetV<uint32_t>(inputMap->triangleValueIndexOffsets, idx);
                 uint32_t valueIdxOut             = arrayGetV<uint32_t>(output->triangleValueByteOffsets, idx);
-                uint32_t* __restrict triangleOut = arrayGet<uint32_t>(output->values, valueIdxOut * 4);
+                uint32_t* __restrict triangleOut = arrayGet<uint32_t>(output->values, valueIdxOut);
 
                 uint32_t count = subdivLevelGetCount(arrayGetV<uint16_t>(output->triangleSubdivLevels, idx), output->frequency);
 
@@ -874,7 +874,7 @@ MICROMESH_API Result MICROMESH_CALL micromeshOpQuantizedPackedToFloat(OpContext 
             {
                 uint32_t valueIdxIn                   = arrayGetV<uint32_t>(inputMap->triangleValueByteOffsets, idx);
                 uint32_t valueIdxOut                  = arrayGetV<uint32_t>(output->triangleValueIndexOffsets, idx);
-                const uint32_t* __restrict triangleIn = arrayGet<uint32_t>(inputMap->values, valueIdxIn * 4);
+                const uint32_t* __restrict triangleIn = arrayGet<uint32_t>(inputMap->values, valueIdxIn);
 
                 uint32_t count = subdivLevelGetCount(arrayGetV<uint16_t>(output->triangleSubdivLevels, idx), output->frequency);
 
